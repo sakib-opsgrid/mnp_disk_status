@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<meta name="theme-color" content="#1a6ff4"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<title>MNP Status Reporter</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="style.css"/>
+</head>
+<body>
+
+<!-- ════════════════════
+     SCREEN 1 — INPUT
+════════════════════ -->
+<div id="s-input" class="screen active">
+  <header class="app-bar">
+    <div class="ab-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8"><rect x="2" y="3" width="20" height="14" rx="2.5"/><path d="M8 21h8M12 17v4"/><path d="M6 7h4M6 11h8"/></svg>
+    </div>
+    <div>
+      <div class="ab-title">MNP Status Reporter</div>
+      <div class="ab-sub">Infrastructure Monitoring</div>
+    </div>
+  </header>
+
+  <main class="input-main">
+    <div class="paste-card">
+      <div class="paste-head">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/></svg>
+        Paste Raw Nagios Data
+      </div>
+      <textarea id="raw" spellcheck="false"
+        placeholder="proda2paetserver10&#10;Disk&#10;WARNING	05-12-2026 09:21:04	0d 23h	1/1	DISK WARNING - free space: /usr/local/tomcat 8074 MB (15% inode=99%):&#10;&#10;proda2pdndserver2&#10;Memory&#10;WARNING	05-12-2026 09:21:24	49d	1/1	Memory WARNING. 81% used. Using 6446 MB out of 7896 MB&#10;..."></textarea>
+      <div class="err-msg" id="err"></div>
+      <div class="paste-foot">
+        <div class="rule-pills">
+          <span class="rpill">≤ 20% free only</span>
+          <span class="rpill">Auto 9 AM / 6 PM</span>
+          <span class="rpill">All partitions</span>
+        </div>
+        <div class="paste-btns">
+          <button class="btn-ghost" onclick="document.getElementById('raw').value=''">Clear</button>
+          <button class="btn-primary" onclick="generate()">
+            <svg viewBox="0 0 24 24" fill="none" stroke-width="2.2"><path d="M5 3l14 9-14 9V3z"/></svg>
+            Generate
+          </button>
+        </div>
+      </div>
+    </div>
+    <p class="kbd-hint">Tip: <kbd>Ctrl</kbd> + <kbd>Enter</kbd> to generate</p>
+    <p class="copyright">© 2026 Najmaz Sakib · Infozillion Teletech Bd Ltd</p>
+  </main>
+</div>
+
+<!-- ═════════════════════
+     SCREEN 2 — REPORT
+═════════════════════ -->
+<div id="s-report" class="screen">
+  <header class="app-bar">
+    <button class="back-btn" onclick="goBack()">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="2.2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
+    </button>
+    <div class="ab-center">
+      <div class="ab-title">Status Report</div>
+      <div class="ab-sub" id="r-dt">—</div>
+    </div>
+    <div class="ab-actions">
+      <button class="icon-btn" onclick="copyWhatsApp()" title="Copy for WhatsApp">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+      </button>
+      <button class="icon-btn" onclick="exportTxt()" title="Export .txt">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <main class="report-main">
+
+    <!-- Stats -->
+    <div class="stats-strip">
+      <div class="stat-item s-total">
+        <span class="stat-val" id="s-tot">0</span>
+        <span class="stat-lbl">Total</span>
+      </div>
+      <div class="stat-sep"></div>
+      <div class="stat-item s-warn">
+        <span class="stat-val" id="s-wrn">0</span>
+        <span class="stat-lbl">Warning</span>
+      </div>
+      <div class="stat-sep"></div>
+      <div class="stat-item s-crit">
+        <span class="stat-val" id="s-crt">0</span>
+        <span class="stat-lbl">Critical</span>
+      </div>
+    </div>
+
+    <!-- Search + filter -->
+    <div class="search-row">
+      <div class="search-field">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+        <input type="text" id="q" placeholder="Search host or partition…" oninput="applyFilter()" autocomplete="off" autocorrect="off" autocapitalize="off"/>
+      </div>
+      <select id="ftype" onchange="applyFilter()">
+        <option value="all">All</option>
+        <option value="Disk">Disk</option>
+        <option value="Memory">Memory</option>
+        <option value="Swap">Swap</option>
+      </select>
+    </div>
+
+    <div class="list-meta" id="cnt"></div>
+
+    <!-- Alert cards -->
+    <div id="cards" class="cards-list"></div>
+    <div class="no-res" id="nores">No matching entries found.</div>
+
+    <!-- WhatsApp section -->
+    <section class="wa-section">
+      <div class="wa-head">
+        <div class="wa-label">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          WhatsApp Output
+        </div>
+        <button class="btn-copy-wa" onclick="copyWhatsApp()">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+          Copy
+        </button>
+      </div>
+      <div class="wa-bg">
+        <div class="wa-bubble">
+          <pre id="plain"></pre>
+          <div class="wa-meta">
+            <span id="wa-time-lbl"></span>
+            <svg viewBox="0 0 18 11" fill="none" width="18"><path d="M1 5.5l3 3 5-5" stroke="#53bdeb" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M7 5.5l3 3 5-5" stroke="#53bdeb" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+        </div>
+      </div>
+    </section>
+    <p class="copyright">© 2026 Najmaz Sakib · Infozillion Teletech Bd Ltd</p>
+
+  </main>
+</div>
+
+<div class="toast" id="toast"></div>
+<script src="app.js"></script>
+</body>
+</html>
