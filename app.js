@@ -24,7 +24,6 @@ function snapTime(d) {
 /* ══════════════════════════════════════════
    PARSER
 ══════════════════════════════════════════ */
-const RE_HOST = /^prod/i;
 const RE_KW   = /^(disk|memory|swap|warning|critical|ok|unknown)$/i;
 const RE_DATE = /^\d{2}-\d{2}-\d{4}/;
 const RE_ALRT = /WARNING|CRITICAL/i;
@@ -34,7 +33,7 @@ function isHostLine(l) {
   if (RE_KW.test(l))    return false;
   if (RE_DATE.test(l))  return false;
   if (l.includes('\t')) return false;
-  return RE_HOST.test(l);
+  return true;
 }
 
 function getStatus(l) {
@@ -178,7 +177,7 @@ function buildPlainText(ents, m) {
       lines.push(`${n}. ${e.host}: Swap${p.mb ? ' ' + p.mb.toLocaleString() + ' MB' : ''} (${p.pct}% free)`);
     } else {
       const desc = e.partitions
-        .map(p => `${p.name} ${p.mb.toLocaleString()} MB (${p.pct}% inode)`)
+        .map(p => `${p.name} ${p.mb.toLocaleString()} MB (${p.pct}% free, inode=${p.inode}%)`)
         .join(', ');
       lines.push(`${n}. ${e.host}: ${desc}`);
     }
