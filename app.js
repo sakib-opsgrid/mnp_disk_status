@@ -122,6 +122,9 @@ function parseRaw(raw) {
     if (i >= lines.length) break;
     const svc  = lines[i++].trim().toLowerCase();
 
+    /* Skip unsupported service types (PING, HTTP, SSH, etc.) */
+    if (!['disk','memory','swap'].includes(svc)) continue;
+
     while (i < lines.length && !isHostLine(lines[i])) {
       const l = lines[i++];
       if (!RE_ALRT.test(l)) continue;
@@ -177,7 +180,7 @@ function buildPlainText(ents, m) {
       lines.push(`${n}. ${e.host}: Swap${p.mb ? ' ' + p.mb.toLocaleString() + ' MB' : ''} (${p.pct}% free)`);
     } else {
       const desc = e.partitions
-        .map(p => `${p.name} ${p.mb.toLocaleString()} MB (${p.pct}% free, inode=${p.inode}%)`)
+        .map(p => `${p.name} ${p.mb.toLocaleString()} MB (${p.pct}% inode=${p.inode}%)`)
         .join(', ');
       lines.push(`${n}. ${e.host}: ${desc}`);
     }
