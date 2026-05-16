@@ -1,12 +1,12 @@
 # MNP Status Reporter
 
-Mobile-first web tool that converts raw Nagios monitoring output into a clean report — ready to paste directly into WhatsApp.
+Web-based dashboard that converts raw Nagios monitoring output into a clean, structured report — with one-click copy for WhatsApp.
 
 ## Files
 
 ```
 ├── index.html   — App UI (input + report screens)
-├── style.css    — Mobile-first responsive styles
+├── style.css    — Web-first dashboard styles
 ├── app.js       — Parser, renderer, export logic
 └── README.md    — This file
 ```
@@ -23,13 +23,13 @@ Mobile-first web tool that converts raw Nagios monitoring output into a clean re
 | Rule | Detail |
 |------|--------|
 | Disk | Only partitions with free space **≤ 20%** included |
-| Multiple partitions | All qualifying partitions per server on one line |
 | Disk format | `partition MB (free% inode=inode%)` |
+| Multiple partitions | All qualifying partitions per server |
 | Memory | Always included — shows used MB and % |
 | Swap | Always included — shows free MB and % |
 | Deduplication | One entry per host per service type |
-| Hostname | Any prefix accepted — not limited to `prod` |
-| Unsupported services | PING, HTTP, SSH etc. are silently skipped |
+| Hostname | Any prefix accepted |
+| Unsupported services | PING, HTTP, SSH etc. silently skipped |
 | Time | Snapped to nearest slot: **09:00 AM** or **06:00 PM** |
 
 ## Keyboard Shortcut
