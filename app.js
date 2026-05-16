@@ -110,34 +110,46 @@ function parseDisk(info, host, status) {
   };
 }
 
+const KNOWN_SVC = ['disk', 'memory', 'swap'];
+
 function parseRaw(raw) {
   const lines = raw.split('\n').map(l => l.trim()).filter(Boolean);
   const out   = [];
   let i = 0;
 
   while (i < lines.length) {
+    /* Must be a hostname line */
     if (!isHostLine(lines[i])) { i++; continue; }
 
     const host = lines[i++];
     if (i >= lines.length) break;
-    const svc  = lines[i++].trim().toLowerCase();
 
-    /* Skip unsupported service types (PING, HTTP, SSH, etc.) */
-    if (!['disk','memory','swap'].includes(svc)) continue;
+    /* One host can have multiple service blocks (e.g. Disk + Swap).
+       Keep consuming service blocks until we hit a new hostname. */
+    while (i < lines.length && RE_KW.test(lines[i])) {
+      const svcLine = lines[i++].trim().toLowerCase();
 
-    while (i < lines.length && !isHostLine(lines[i])) {
-      const l = lines[i++];
-      if (!RE_ALRT.test(l)) continue;
+      if (!KNOWN_SVC.includes(svcLine)) {
+        /* Unsupported service — skip its data lines */
+        while (i < lines.length && !RE_KW.test(lines[i]) && !isHostLine(lines[i])) i++;
+        continue;
+      }
 
-      const status = getStatus(l);
-      const info   = getInfo(l);
-      let entry    = null;
+      /* Consume data lines for this service block */
+      while (i < lines.length && !RE_KW.test(lines[i]) && !isHostLine(lines[i])) {
+        const l = lines[i++];
+        if (!RE_ALRT.test(l)) continue;
 
-      if      (svc === 'memory') entry = parseMemory(info, host, status);
-      else if (svc === 'swap')   entry = parseSwap(info, host, status);
-      else if (svc === 'disk')   entry = parseDisk(info, host, status);
+        const status = getStatus(l);
+        const info   = getInfo(l);
+        let entry    = null;
 
-      if (entry) out.push(entry);
+        if      (svcLine === 'memory') entry = parseMemory(info, host, status);
+        else if (svcLine === 'swap')   entry = parseSwap(info, host, status);
+        else if (svcLine === 'disk')   entry = parseDisk(info, host, status);
+
+        if (entry) out.push(entry);
+      }
     }
   }
   return out;
