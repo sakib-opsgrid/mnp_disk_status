@@ -168,35 +168,43 @@ function dedup(arr) {
 /* ══════════════════════════════════════════
    WHATSAPP PLAIN TEXT — no emoji, clean
 ══════════════════════════════════════════ */
+function entryLine(e, n) {
+  if (e.isMemory) {
+    const p = e.partitions[0];
+    return `${n}. ${e.host}: Memory${p.mb ? ' ' + p.mb.toLocaleString() + ' MB' : ''} (${p.pct}% used)`;
+  } else if (e.isSwap) {
+    const p = e.partitions[0];
+    return `${n}. ${e.host}: Swap${p.mb ? ' ' + p.mb.toLocaleString() + ' MB' : ''} (${p.pct}% free)`;
+  } else {
+    const desc = e.partitions
+      .map(p => `${p.name} ${p.mb.toLocaleString()} MB (${p.pct}% inode=${p.inode}%)`)
+      .join(', ');
+    return `${n}. ${e.host}: ${desc}`;
+  }
+}
+
 function buildPlainText(ents, m) {
-  const total = ents.length;
-  const crit  = ents.filter(e => e.status === 'CRITICAL').length;
-  const warn  = ents.filter(e => e.status === 'WARNING').length;
+  const critList = ents.filter(e => e.status === 'CRITICAL');
+  const warnList = ents.filter(e => e.status === 'WARNING');
 
   const lines = [];
   lines.push(`Date: ${m.date}`);
   lines.push(`Time: ${m.time}`);
   lines.push('');
-  lines.push(`Total: ${total}`);
-  lines.push(`Critical: ${crit}`);
-  lines.push(`Warning: ${warn}`);
+  lines.push(`Total: ${ents.length}`);
   lines.push('');
 
-  ents.forEach((e, i) => {
-    const n = i + 1;
-    if (e.isMemory) {
-      const p = e.partitions[0];
-      lines.push(`${n}. ${e.host}: Memory${p.mb ? ' ' + p.mb.toLocaleString() + ' MB' : ''} (${p.pct}% used)`);
-    } else if (e.isSwap) {
-      const p = e.partitions[0];
-      lines.push(`${n}. ${e.host}: Swap${p.mb ? ' ' + p.mb.toLocaleString() + ' MB' : ''} (${p.pct}% free)`);
-    } else {
-      const desc = e.partitions
-        .map(p => `${p.name} ${p.mb.toLocaleString()} MB (${p.pct}% inode=${p.inode}%)`)
-        .join(', ');
-      lines.push(`${n}. ${e.host}: ${desc}`);
-    }
-  });
+  if (critList.length) {
+    lines.push(`Critical: ${critList.length}`);
+    critList.forEach((e, i) => lines.push(entryLine(e, i + 1)));
+    lines.push('');
+  }
+
+  if (warnList.length) {
+    lines.push(`Warning: ${warnList.length}`);
+    warnList.forEach((e, i) => lines.push(entryLine(e, i + 1)));
+    lines.push('');
+  }
 
   return lines.join('\n');
 }
