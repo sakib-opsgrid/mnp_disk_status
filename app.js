@@ -194,17 +194,13 @@ function buildPlainText(ents, m) {
   lines.push(`Total: ${ents.length}`);
   lines.push('');
 
-  if (critList.length) {
-    lines.push(`Critical: ${critList.length}`);
-    critList.forEach((e, i) => lines.push(entryLine(e, i + 1)));
-    lines.push('');
-  }
+  lines.push(`Critical: ${critList.length}`);
+  critList.forEach((e, i) => lines.push(entryLine(e, i + 1)));
+  lines.push('');
 
-  if (warnList.length) {
-    lines.push(`Warning: ${warnList.length}`);
-    warnList.forEach((e, i) => lines.push(entryLine(e, i + 1)));
-    lines.push('');
-  }
+  lines.push(`Warning: ${warnList.length}`);
+  warnList.forEach((e, i) => lines.push(entryLine(e, i + 1)));
+  lines.push('');
 
   return lines.join('\n');
 }
