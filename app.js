@@ -172,11 +172,11 @@ function parseRaw(raw) {
   return out;
 }
 
-/* Dedup: one entry per host + service (svcName for generic, type for others) */
+/* Dedup: one entry per host+type; for generic services collapse all same-host entries into one */
 function dedup(arr) {
   const seen = new Set();
   return arr.filter(e => {
-    const k = e.isGeneric ? `${e.host}::${e.svcName}` : `${e.host}::${e.type}`;
+    const k = e.isGeneric ? `${e.host}::__generic__` : `${e.host}::${e.type}`;
     if (seen.has(k)) return false;
     seen.add(k); return true;
   });
@@ -363,13 +363,11 @@ function generate() {
     return;
   }
 
-  /* Group generic services by host so counts match WhatsApp output */
-  const display = groupGeneric(parsed);
-  entries = display;
+  entries = parsed;
 
-  const tot  = display.length;
-  const crit = display.filter(e => e.status === 'CRITICAL').length;
-  const warn = display.filter(e => e.status === 'WARNING').length;
+  const tot  = parsed.length;
+  const crit = parsed.filter(e => e.status === 'CRITICAL').length;
+  const warn = parsed.filter(e => e.status === 'WARNING').length;
 
   /* Update stats */
   document.getElementById('s-tot').textContent = tot;
