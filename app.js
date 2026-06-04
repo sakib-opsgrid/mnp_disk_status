@@ -112,31 +112,47 @@ function parseDisk(info, host, status) {
 
 const KNOWN_SVC = ['disk', 'memory', 'swap'];
 
+/* Detect if lines[idx] is a service name (next line is tab-data) */
+function isServiceLine(lines, idx) {
+  if (idx >= lines.length) return false;
+  const l = lines[idx];
+  if (!l || l.includes('\t') || RE_DATE.test(l)) return false;
+  const next = lines[idx + 1];
+  return !!(next && next.includes('\t'));
+}
+
+/* Generic service parser for kafka/ping/etc */
+function parseGenericService(info, host, status, svcName) {
+  const msg = info.replace(/^.*?Active:\s*/i, '').trim();
+  return {
+    host, type: 'Service', status,
+    svcName, message: msg,
+    partitions: [],
+    isMemory: false, isSwap: false, isGeneric: true,
+    worstUsed: 0,
+  };
+}
+
 function parseRaw(raw) {
   const lines = raw.split('\n').map(l => l.trim()).filter(Boolean);
   const out   = [];
   let i = 0;
 
   while (i < lines.length) {
-    /* Must be a hostname line */
-    if (!isHostLine(lines[i])) { i++; continue; }
+    /* Hostname: current line is not a service/tab/date,
+       and next line IS a service (followed by tab data) */
+    if (!isHostLine(lines[i]) || !isServiceLine(lines, i + 1)) { i++; continue; }
 
     const host = lines[i++];
     if (i >= lines.length) break;
 
-    /* One host can have multiple service blocks (e.g. Disk + Swap).
-       Keep consuming service blocks until we hit a new hostname. */
-    while (i < lines.length && RE_KW.test(lines[i])) {
-      const svcLine = lines[i++].trim().toLowerCase();
+    /* Consume all service blocks under this host */
+    while (i < lines.length && isServiceLine(lines, i)) {
+      const svcName  = lines[i++].trim();
+      const svcLower = svcName.toLowerCase();
 
-      if (!KNOWN_SVC.includes(svcLine)) {
-        /* Unsupported service — skip its data lines */
-        while (i < lines.length && !RE_KW.test(lines[i]) && !isHostLine(lines[i])) i++;
-        continue;
-      }
-
-      /* Consume data lines for this service block */
-      while (i < lines.length && !RE_KW.test(lines[i]) && !isHostLine(lines[i])) {
+      /* Consume tab-data lines for this service block */
+      while (i < lines.length && lines[i].includes('\t')) {
         const l = lines[i++];
         if (!RE_ALRT.test(l)) continue;
 
@@ -144,9 +160,10 @@ function parseRaw(raw) {
         const info   = getInfo(l);
         let entry    = null;
 
-        if      (svcLine === 'memory') entry = parseMemory(info, host, status);
-        else if (svcLine === 'swap')   entry = parseSwap(info, host, status);
-        else if (svcLine === 'disk')   entry = parseDisk(info, host, status);
+        if      (svcLower === 'memory') entry = parseMemory(info, host, status);
+        else if (svcLower === 'swap')   entry = parseSwap(info, host, status);
+        else if (svcLower === 'disk')   entry = parseDisk(info, host, status);
+        else                            entry = parseGenericService(info, host, status, svcName);
 
         if (entry) out.push(entry);
       }
@@ -155,11 +172,11 @@ function parseRaw(raw) {
   return out;
 }
 
-/* Dedup: one entry per host + service type */
+/* Dedup: one entry per host + service (svcName for generic, type for others) */
 function dedup(arr) {
   const seen = new Set();
   return arr.filter(e => {
-    const k = `${e.host}::${e.type}`;
+    const k = e.isGeneric ? `${e.host}::${e.svcName}` : `${e.host}::${e.type}`;
     if (seen.has(k)) return false;
     seen.add(k); return true;
   });
@@ -169,7 +186,9 @@ function dedup(arr) {
    WHATSAPP PLAIN TEXT — no emoji, clean
 ══════════════════════════════════════════ */
 function entryLine(e, n) {
-  if (e.isMemory) {
+  if (e.isGeneric) {
+    return `${n}. ${e.host}: ${e.message}`;
+  } else if (e.isMemory) {
     const p = e.partitions[0];
     return `${n}. ${e.host}: Memory${p.mb ? ' ' + p.mb.toLocaleString() + ' MB' : ''} (${p.pct}% used)`;
   } else if (e.isSwap) {
@@ -183,9 +202,25 @@ function entryLine(e, n) {
   }
 }
 
+/* Group generic service entries by host — one line per host */
+function groupGeneric(list) {
+  const result = [];
+  const seen   = new Map(); // host -> entry index in result
+  list.forEach(e => {
+    if (!e.isGeneric) { result.push(e); return; }
+    if (seen.has(e.host)) {
+      // already have an entry for this host — skip duplicate
+    } else {
+      seen.set(e.host, result.length);
+      result.push(e);
+    }
+  });
+  return result;
+}
+
 function buildPlainText(ents, m) {
-  const critList = ents.filter(e => e.status === 'CRITICAL');
-  const warnList = ents.filter(e => e.status === 'WARNING');
+  const critList = groupGeneric(ents.filter(e => e.status === 'CRITICAL'));
+  const warnList = groupGeneric(ents.filter(e => e.status === 'WARNING'));
 
   const lines = [];
   lines.push(`Date: ${m.date}`);
@@ -235,33 +270,37 @@ function renderCards(data) {
 
     /* Partition rows */
     let partsHTML = '';
-    e.partitions.forEach(p => {
-      const col = barColor(p.usedPct);
-      let pctLabel, infoStr;
+    if (e.isGeneric) {
+      partsHTML = `<div class="part-item"><div class="part-info" style="font-size:0.74rem;color:var(--t2)">${e.message}</div></div>`;
+    } else {
+      e.partitions.forEach(p => {
+        const col = barColor(p.usedPct);
+        let pctLabel, infoStr;
 
-      if (e.isMemory) {
-        pctLabel = `${p.pct}% used`;
-        infoStr  = p.mb ? `${p.mb.toLocaleString()} MB used` : '';
-      } else if (e.isSwap) {
-        pctLabel = `${p.pct}% free`;
-        infoStr  = p.mb ? `${p.mb.toLocaleString()} MB free` : '';
-      } else {
-        pctLabel = `${p.pct}% free`;
-        infoStr  = `${p.mb.toLocaleString()} MB · inode: ${p.inode}%`;
-      }
+        if (e.isMemory) {
+          pctLabel = `${p.pct}% used`;
+          infoStr  = p.mb ? `${p.mb.toLocaleString()} MB used` : '';
+        } else if (e.isSwap) {
+          pctLabel = `${p.pct}% free`;
+          infoStr  = p.mb ? `${p.mb.toLocaleString()} MB free` : '';
+        } else {
+          pctLabel = `${p.pct}% free`;
+          infoStr  = `${p.mb.toLocaleString()} MB · inode: ${p.inode}%`;
+        }
 
-      partsHTML += `
-        <div class="part-item">
-          <div class="part-row-top">
-            <span class="part-name">${p.name}</span>
-            <span class="part-pct">${pctLabel}</span>
-          </div>
-          <div class="bar-track">
-            <div class="bar-fill" style="width:${Math.min(p.usedPct,100)}%;background:${col}"></div>
-          </div>
-          ${infoStr ? `<div class="part-info">${infoStr}</div>` : ''}
-        </div>`;
-    });
+        partsHTML += `
+          <div class="part-item">
+            <div class="part-row-top">
+              <span class="part-name">${p.name}</span>
+              <span class="part-pct">${pctLabel}</span>
+            </div>
+            <div class="bar-track">
+              <div class="bar-fill" style="width:${Math.min(p.usedPct,100)}%;background:${col}"></div>
+            </div>
+            ${infoStr ? `<div class="part-info">${infoStr}</div>` : ''}
+          </div>`;
+      });
+    }
 
     card.innerHTML = `
       <div class="card-hd">
