@@ -219,8 +219,8 @@ function groupGeneric(list) {
 }
 
 function buildPlainText(ents, m) {
-  const critList = groupGeneric(ents.filter(e => e.status === 'CRITICAL'));
-  const warnList = groupGeneric(ents.filter(e => e.status === 'WARNING'));
+  const critList = ents.filter(e => e.status === 'CRITICAL');
+  const warnList = ents.filter(e => e.status === 'WARNING');
 
   const lines = [];
   lines.push(`Date: ${m.date}`);
@@ -363,11 +363,13 @@ function generate() {
     return;
   }
 
-  entries = parsed;
+  /* Group generic services by host so counts match WhatsApp output */
+  const display = groupGeneric(parsed);
+  entries = display;
 
-  const tot  = parsed.length;
-  const crit = parsed.filter(e => e.status === 'CRITICAL').length;
-  const warn = parsed.filter(e => e.status === 'WARNING').length;
+  const tot  = display.length;
+  const crit = display.filter(e => e.status === 'CRITICAL').length;
+  const warn = display.filter(e => e.status === 'WARNING').length;
 
   /* Update stats */
   document.getElementById('s-tot').textContent = tot;
